@@ -1,0 +1,47 @@
+[
+  {
+    "id": 1,
+    "category": "PEACE",
+    "headline": "UN brokered ceasefire holds for third consecutive day",
+    "source": "Reuters",
+    "time": "14 min",
+    "region": "Europe",
+    "score": 8.2
+  },
+  {
+    "id": 2,
+    "category": "CONFLICT",
+    "headline": "Clashes reported near border zone as tensions escalate",
+    "source": "BBC",
+    "time": "31 min",
+    "region": "Mid East",
+    "score": 2.2
+  },
+  {
+    "id": 3,
+    "category": "NEUTRAL",
+    "headline": "G20 leaders to discuss global security framework",
+    "source": "Al Jazeera",
+    "time": "1 hr",
+    "region": "Global",
+    "score": 5.5
+  },
+  {
+    "id": 4,
+    "category": "PEACE",
+    "headline": "Diplomatic talks resume between rival factions after six months",
+    "source": "Guardian",
+    "time": "2 hr",
+    "region": "Africa",
+    "score": 7.4
+  },
+  {
+    "id": 5,
+    "category": "CONFLICT",
+    "headline": "Humanitarian aid blocked as armed groups seize corridor",
+    "source": "AP News",
+    "time": "3 hr",
+    "region": "S. Asia",
+    "score": 1.8
+  }
+]

@@ -1,0 +1,22 @@
+[
+  { "name": "India", "code": "IN", "lat": 20.5937, "lng": 78.9629, "zoom": 5 },
+  { "name": "Ukraine", "code": "UA", "lat": 48.3794, "lng": 31.1656, "zoom": 6 },
+  { "name": "Sudan", "code": "SD", "lat": 12.8628, "lng": 30.2176, "zoom": 5 },
+  { "name": "Israel", "code": "IL", "lat": 31.0461, "lng": 34.8516, "zoom": 7 },
+  { "name": "Germany", "code": "DE", "lat": 51.1657, "lng": 10.4515, "zoom": 6 },
+  { "name": "United States", "code": "US", "lat": 37.0902, "lng": -95.7129, "zoom": 4 },
+  { "name": "United Kingdom", "code": "GB", "lat": 55.3781, "lng": -3.436, "zoom": 5 },
+  { "name": "Russia", "code": "RU", "lat": 61.524, "lng": 105.3188, "zoom": 3 },
+  { "name": "China", "code": "CN", "lat": 35.8617, "lng": 104.1954, "zoom": 4 },
+  { "name": "France", "code": "FR", "lat": 46.2276, "lng": 2.2137, "zoom": 6 },
+  { "name": "Brazil", "code": "BR", "lat": -14.235, "lng": -51.9253, "zoom": 4 },
+  { "name": "Australia", "code": "AU", "lat": -25.2744, "lng": 133.7751, "zoom": 4 },
+  { "name": "Japan", "code": "JP", "lat": 36.2048, "lng": 138.2529, "zoom": 5 },
+  { "name": "South Africa", "code": "ZA", "lat": -30.5595, "lng": 22.9375, "zoom": 5 },
+  { "name": "Pakistan", "code": "PK", "lat": 30.3753, "lng": 69.3451, "zoom": 5 },
+  { "name": "Iran", "code": "IR", "lat": 32.4279, "lng": 53.688, "zoom": 5 },
+  { "name": "Iraq", "code": "IQ", "lat": 33.2232, "lng": 43.6793, "zoom": 6 },
+  { "name": "Syria", "code": "SY", "lat": 34.8021, "lng": 38.9968, "zoom": 6 },
+  { "name": "Turkey", "code": "TR", "lat": 38.9637, "lng": 35.2433, "zoom": 5 },
+  { "name": "Yemen", "code": "YE", "lat": 15.5527, "lng": 48.5164, "zoom": 6 }
+]

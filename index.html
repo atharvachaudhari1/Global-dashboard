@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Global Peace Dashboard | Live</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    <p id="loading-text">Fetching live news...</p>
+  </div>
+
+  <div id="error-toast"></div>
+  <div id="success-toast"></div>
+
+  <div id="topbar">
+    <div class="topbar-left">
+      <span class="live-dot"></span>
+      <span class="dash-title">Global Peace Dashboard</span>
+      <span class="live-badge">LIVE</span>
+    </div>
+    <div class="topbar-center">
+      <span class="nav-item active" onclick="switchTab('overview', this)">Overview</span>
+      <span class="nav-item" onclick="switchTab('map', this)">Map</span>
+      <span class="nav-item" onclick="switchTab('analytics', this)">Analytics</span>
+      <span class="nav-item" onclick="switchTab('newsfeed', this)">News Feed</span>
+    </div>
+    <div class="topbar-right">
+      <span id="last-updated">Last updated: --:--</span>
+      <span id="countdown-timer">Next: 60s</span>
+      <button id="refresh-btn" onclick="manualRefresh()">↻ Refresh</button>
+      <button id="theme-toggle" onclick="toggleTheme()">☀</button>
+    </div>
+  </div>
+
+  <div id="source-bar">
+    <span class="source-label">News Source:</span>
+    <div id="source-buttons">
+      <button class="source-btn active" data-source="gdelt" onclick="switchSource('gdelt')">GDELT</button>
+      <button class="source-btn" data-source="rss" onclick="switchSource('rss')">RSS MIX</button>
+      <button class="source-btn" data-source="newsdata" onclick="switchSource('newsdata')">NewsData</button>
+      <button class="source-btn" data-source="gnews" onclick="switchSource('gnews')">GNews</button>
+      <button class="source-btn" data-source="newsapi" onclick="switchSource('newsapi')">NewsAPI</button>
+      <button class="source-btn" data-source="guardian" onclick="switchSource('guardian')">Guardian</button>
+      <button class="source-btn" data-source="mediastack" onclick="switchSource('mediastack')">Mediastack</button>
+      <button class="source-btn" data-source="currents" onclick="switchSource('currents')">Currents</button>
+      <button class="source-btn" data-source="all" onclick="switchSource('all')">ALL SOURCES</button>
+    </div>
+    <span id="source-status"></span>
+  </div>
+
+  <div id="metrics-row">
+    <div class="metric-card" id="card-gpi">
+      <div class="metric-label">Global Peace Index</div>
+      <div class="metric-value" id="metric-gpi">--</div>
+      <div class="metric-sub" id="metric-gpi-sub">Calculating...</div>
+    </div>
+    <div class="metric-card" id="card-articles">
+      <div class="metric-label">Articles Analyzed</div>
+      <div class="metric-value" id="metric-articles">0</div>
+      <div class="metric-sub" id="metric-articles-sub">Last fetch</div>
+    </div>
+    <div class="metric-card" id="card-conflicts">
+      <div class="metric-label">Conflict Alerts</div>
+      <div class="metric-value conflict-val" id="metric-conflicts">0</div>
+      <div class="metric-sub" id="metric-conflicts-sub">Score below 4.0</div>
+    </div>
+    <div class="metric-card" id="card-peace">
+      <div class="metric-label">Peace Events</div>
+      <div class="metric-value peace-val" id="metric-peace">0</div>
+      <div class="metric-sub" id="metric-peace-sub">Score above 6.5</div>
+    </div>
+  </div>
+
+  <div id="main-content">
+    <div id="left-col">
+      <div class="panel" id="map-panel">
+        <div class="panel-header">
+          <span class="panel-title">Global Peace Map</span>
+          <span class="panel-sub">Click marker for details · Color = Peace Score</span>
+        </div>
+        <div id="country-search-wrap">
+          <input id="country-search-input" type="text" placeholder="Search country..." autocomplete="off">
+          <button id="country-search-reset" onclick="resetCountrySearch()">Reset to Global</button>
+          <div id="country-search-results"></div>
+        </div>
+        <div id="map"></div>
+        <div id="map-legend">
+          <span class="legend-item"><span class="ldot green"></span>Peaceful (≥6.5)</span>
+          <span class="legend-item"><span class="ldot orange"></span>Tense (4–6.4)</span>
+          <span class="legend-item"><span class="ldot red"></span>Conflict (&lt;4)</span>
+        </div>
+        <div id="map-filter-bar" style="display:none">
+          <span id="map-filter-label">Showing: All regions</span>
+          <button onclick="clearMapFilter()">✕ Clear filter</button>
+        </div>
+      </div>
+
+      <div id="charts-row">
+        <div class="panel chart-panel">
+          <div class="panel-header">
+            <span class="panel-title">Peace Score Trend</span>
+            <span class="panel-sub">Last 20 articles</span>
+          </div>
+          <canvas id="trendChart" height="130"></canvas>
+        </div>
+        <div class="panel chart-panel">
+          <div class="panel-header">
+            <span class="panel-title">Classification Split</span>
+            <span class="panel-sub">Article distribution</span>
+          </div>
+          <div id="doughnut-wrap">
+            <canvas id="doughnutChart" width="120" height="120"></canvas>
+            <div id="doughnut-legend">
+              <div><span class="ldot green"></span><span id="peace-pct">0%</span> Peace</div>
+              <div><span class="ldot gray"></span><span id="neutral-pct">0%</span> Neutral</div>
+              <div><span class="ldot red"></span><span id="conflict-pct">0%</span> Conflict</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="right-col">
+      <div class="panel" id="news-panel">
+        <div class="panel-header">
+          <span class="panel-title">Live News Feed</span>
+          <span class="panel-sub" id="feed-source-label">Auto-classified</span>
+        </div>
+        <input type="text" id="search-input" placeholder="Search articles..." oninput="filterNewsFeed()">
+        <div id="filter-tabs">
+          <button class="filter-btn active" onclick="setFilter('all', this)">All</button>
+          <button class="filter-btn" onclick="setFilter('peace', this)">Peace</button>
+          <button class="filter-btn" onclick="setFilter('neutral', this)">Neutral</button>
+          <button class="filter-btn" onclick="setFilter('conflict', this)">Conflict</button>
+        </div>
+        <div id="news-feed">
+          <div class="empty-state">Loading news...</div>
+        </div>
+        <button id="copy-report-btn" onclick="copyReport()">📋 Copy Peace Score Report</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
