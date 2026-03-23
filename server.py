@@ -268,6 +268,8 @@ def fetch_gdelt_news(*, country: str) -> list[dict]:
         "format": "json",
         "maxrecords": 50,
         "sourcelang": "english",
+        "timespan": "1month",
+        "sort": "datedesc",
     }
     response = requests.get(GDELT_URL, params=params, timeout=25)
     response.raise_for_status()

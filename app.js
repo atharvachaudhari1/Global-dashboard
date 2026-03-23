@@ -223,7 +223,7 @@ async function fetchFromCurrents() {
 
 async function fetchFromGDELT() {
   const query = "peace OR conflict OR war OR protest OR ceasefire OR diplomacy";
-  const url = `${CONFIG.APIs.gdelt.url}?query=${encodeURIComponent(query)}&mode=artlist&maxrecords=30&format=json&sourcelang=english`;
+  const url = `${CONFIG.APIs.gdelt.url}?query=${encodeURIComponent(query)}&mode=ArtList&maxrecords=100&format=json&sourcelang=english&timespan=1month&sort=datedesc`;
   const data = await fetchJSON(url);
   if (!data.articles) throw new Error("GDELT: no articles");
   return data.articles.map((a) => ({
@@ -359,7 +359,7 @@ function renderNewsFeed(articles) {
     container.innerHTML = '<div class="empty-state">No articles match your filter.</div>';
     return;
   }
-  container.innerHTML = articles.slice(0, CONFIG.MAX_ARTICLES).map((a) => `
+  container.innerHTML = articles.map((a) => `
     <div class="news-item" onclick="window.open('${a.link}','_blank')">
       <div class="news-header">
         <span class="badge badge-${a.cls}">${a.category}</span>
