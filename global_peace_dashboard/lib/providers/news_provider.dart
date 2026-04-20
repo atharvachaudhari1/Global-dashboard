@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/article.dart';
 import '../services/api_service.dart';
+import '../services/local_news_cache.dart';
 import '../config/config.dart';
 
 class NewsProvider extends ChangeNotifier {
@@ -14,6 +15,7 @@ class NewsProvider extends ChangeNotifier {
   DateTime? _lastUpdated;
   Timer? _refreshTimer;
   int _countdown = 60;
+  bool _cacheLoaded = false;
 
   List<Article> get articles => _filteredArticles;
   bool get isLoading => _isLoading;
@@ -55,24 +57,42 @@ class NewsProvider extends ChangeNotifier {
   }
 
   Future<void> fetchNews() async {
+    await _loadCacheOnce();
     _isLoading = true;
     notifyListeners();
 
     try {
+      List<Article> fresh = [];
       if (_activeSource == 'all') {
-        _articles = await ApiService.fetchFromAll();
+        fresh = await ApiService.fetchFromAll();
       } else if (_activeSource == 'gdelt') {
-        _articles = await ApiService.fetchFromGdelt();
+        fresh = await ApiService.fetchFromGdelt();
       } else {
-        _articles = await ApiService.fetchFromRss();
+        fresh = await ApiService.fetchFromRss();
       }
+      _articles = fresh;
+      await LocalNewsCache.saveArticles(_articles);
       _lastUpdated = DateTime.now();
     } catch (e) {
-      _articles = [];
+      // Keep existing cache-backed data when live fetch fails.
+      if (_articles.isEmpty) {
+        _articles = await LocalNewsCache.readArticles();
+      }
     }
 
     _isLoading = false;
     notifyListeners();
+  }
+
+  Future<void> _loadCacheOnce() async {
+    if (_cacheLoaded) return;
+    _cacheLoaded = true;
+    final cached = await LocalNewsCache.readArticles();
+    if (cached.isNotEmpty) {
+      _articles = cached;
+      _lastUpdated = DateTime.now();
+      notifyListeners();
+    }
   }
 
   void setSource(String source) {
