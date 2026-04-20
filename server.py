@@ -24,7 +24,7 @@ COUNTRIES_PATH = BASE_DIR / "data" / "countries.json"
 CONFIG_PATH = BASE_DIR / "config.js"
 ENV_PATH = BASE_DIR / ".env"
 SAMPLE_NEWS_PATH = BASE_DIR / "data" / "sample_news.json"
-DB_PATH = BASE_DIR / "news_archive.db"
+DB_PATH = Path(os.getenv("NEWS_DB_PATH", str(BASE_DIR / "news_archive.db")))
 SQLITE_MAX_ROWS = max(1000, int(os.getenv("SQLITE_MAX_ROWS", "50000")))
 SQLITE_PRUNE_BATCH = max(100, int(os.getenv("SQLITE_PRUNE_BATCH", "1000")))
 
