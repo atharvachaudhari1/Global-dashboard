@@ -35,7 +35,7 @@
       <span id="last-updated">Last updated: --:--</span>
       <span id="countdown-timer">Next: 60s</span>
       <button id="refresh-btn" onclick="manualRefresh()">↻ Refresh</button>
-      <button id="theme-toggle" onclick="toggleTheme()">☀</button>
+      <button id="theme-toggle" onclick="toggleTheme()">🌙</button>
     </div>
   </div>
 
@@ -144,6 +144,22 @@
           <div class="empty-state">Loading news...</div>
         </div>
         <button id="copy-report-btn" onclick="copyReport()">📋 Copy Peace Score Report</button>
+      </div>
+
+      <div class="panel" id="chat-panel">
+        <div class="panel-header">
+          <span class="panel-title">Peace Assistant</span>
+          <span class="panel-sub">Ask safety and trend questions</span>
+        </div>
+        <div id="chat-messages">
+          <div class="chat-empty">
+            Ask: "Is it safe to go to America right now?"
+          </div>
+        </div>
+        <div id="chat-input-row">
+          <input id="chat-input" type="text" placeholder="Ask about any country or conflict trend...">
+          <button id="chat-send-btn" onclick="sendChatMessage()">Send</button>
+        </div>
       </div>
     </div>
   </div>

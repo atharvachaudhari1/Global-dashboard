@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 .env
+news_archive.db
+news_archive.db-shm
+news_archive.db-wal

@@ -1,14 +1,17 @@
 :root {
-  --bg: #1a1a1a;
-  --card: #242424;
-  --card2: #2a2a2a;
-  --border: #333333;
-  --text: #ffffff;
-  --muted: #888888;
-  --green: #1d9e75;
-  --orange: #ef9f27;
-  --red: #e24b4a;
-  --radius: 10px;
+  --bg: #f3ead6;
+  --card: #f9f1e2;
+  --card2: #efe3cc;
+  --border: #d9c7a2;
+  --text: #2e2419;
+  --muted: #8b7b62;
+  --green: #5aab72;
+  --orange: #dc8f57;
+  --red: #c96656;
+  --radius: 16px;
+  --shadow-soft: 0 6px 18px rgba(93, 72, 38, 0.08);
+  --chip-bg: #f2e8d2;
+  --surface-strong: #e7d8b9;
 }
 
 * {
@@ -18,7 +21,7 @@
 body {
   margin: 0;
   font-family: "Inter", sans-serif;
-  background: var(--bg);
+  background: radial-gradient(circle at 20% 0%, #fbf4e8 0%, var(--bg) 58%);
   color: var(--text);
 }
 
@@ -31,6 +34,7 @@ body {
   justify-content: space-between;
   padding: 0 20px;
   gap: 10px;
+  box-shadow: var(--shadow-soft);
 }
 
 .topbar-left,
@@ -55,8 +59,8 @@ body {
 }
 
 .live-badge {
-  background: #0f6e56;
-  color: #5dcaa5;
+  background: #1f3b2e;
+  color: #7ac298;
   border: 1px solid var(--green);
   font-size: 11px;
   padding: 2px 8px;
@@ -73,12 +77,12 @@ body {
 
 .nav-item.active {
   color: var(--text);
-  border-bottom: 2px solid var(--green);
+  border-bottom: 2px solid #a38761;
 }
 
 #refresh-btn,
 #theme-toggle {
-  background: transparent;
+  background: var(--chip-bg);
   border: 1px solid var(--border);
   color: var(--muted);
   border-radius: 6px;
@@ -133,7 +137,7 @@ body {
 
 .source-btn.active {
   background: var(--green);
-  color: var(--text);
+  color: #f8f7f3;
   border-color: var(--green);
 }
 
@@ -161,10 +165,11 @@ body {
   padding: 14px 16px;
   border: 0.5px solid var(--border);
   transition: 0.2s;
+  box-shadow: var(--shadow-soft);
 }
 
 .metric-card:hover {
-  background: #2e2e2e;
+  background: #33291f;
 }
 
 .metric-label {
@@ -209,6 +214,7 @@ body {
   border: 0.5px solid var(--border);
   padding: 14px;
   margin-bottom: 12px;
+  box-shadow: var(--shadow-soft);
 }
 
 .panel-header {
@@ -405,7 +411,7 @@ body {
 }
 
 .news-item:hover {
-  background: #2e2e2e;
+  background: #342a20;
   padding-left: 6px;
 }
 
@@ -428,21 +434,21 @@ body {
 }
 
 .badge-peace {
-  background: #0f3d2e;
-  color: #5dcaa5;
-  border: 1px solid #1d9e75;
+  background: #163026;
+  color: #7dc39a;
+  border: 1px solid #2f6e52;
 }
 
 .badge-neutral {
-  background: #2e2e2e;
-  color: #888888;
-  border: 1px solid #444;
+  background: #31281f;
+  color: #b0a08a;
+  border: 1px solid var(--border);
 }
 
 .badge-conflict {
-  background: #3d1010;
-  color: #f09595;
-  border: 1px solid #e24b4a;
+  background: #3a1718;
+  color: #de8f8d;
+  border: 1px solid #7f3232;
 }
 
 .news-time {
@@ -472,7 +478,7 @@ body {
 .score-bar-bg {
   flex: 1;
   height: 4px;
-  background: #333;
+  background: #3d3023;
   border-radius: 2px;
 }
 
@@ -506,10 +512,122 @@ body {
   color: var(--text);
 }
 
+#chat-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 360px;
+}
+
+#chat-messages {
+  flex: 1;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 0.5px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--card2);
+}
+
+.chat-empty {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  padding: 10px 6px;
+}
+
+.chat-msg {
+  margin-bottom: 10px;
+  border: 0.5px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 9px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.chat-msg.user {
+  background: #243128;
+  border-color: #3d5f47;
+}
+
+.chat-msg.bot {
+  background: var(--card);
+}
+
+.chat-msg-title {
+  font-size: 10px;
+  color: var(--muted);
+  margin-bottom: 5px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.chat-summary {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.chat-summary ul {
+  margin: 4px 0 0;
+  padding-left: 16px;
+}
+
+.chat-sources {
+  margin-top: 8px;
+  display: grid;
+  gap: 4px;
+}
+
+.chat-source-link {
+  color: #77ba92;
+  text-decoration: none;
+  font-size: 11px;
+}
+
+.chat-source-link:hover {
+  text-decoration: underline;
+}
+
+#chat-input-row {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+#chat-input {
+  width: 100%;
+  background: var(--card2);
+  border: 0.5px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  outline: none;
+}
+
+#chat-input:focus {
+  border-color: var(--green);
+}
+
+#chat-send-btn {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  border-radius: 6px;
+  padding: 0 12px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+#chat-send-btn:hover {
+  border-color: var(--green);
+}
+
 #loading-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(0, 0, 0, 0.72);
   display: none;
   flex-direction: column;
   align-items: center;
@@ -520,7 +638,7 @@ body {
 .spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid #333;
+  border: 3px solid var(--surface-strong);
   border-top-color: var(--green);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
@@ -547,15 +665,15 @@ body {
 }
 
 #error-toast {
-  background: #3d1010;
-  color: #f09595;
-  border: 1px solid #e24b4a;
+  background: #3a1718;
+  color: #de8f8d;
+  border: 1px solid #7f3232;
 }
 
 #success-toast {
-  background: #0f3d2e;
-  color: #5dcaa5;
-  border: 1px solid #1d9e75;
+  background: #163026;
+  color: #7dc39a;
+  border: 1px solid #2f6e52;
 }
 
 .toast-show {
@@ -595,12 +713,18 @@ body {
 }
 
 body.light-mode {
-  --bg: #f0f0f0;
-  --card: #ffffff;
-  --card2: #f8f8f8;
-  --border: #dddddd;
-  --text: #111111;
-  --muted: #666666;
+  --bg: #13110f;
+  --card: #1f1a15;
+  --card2: #282119;
+  --border: #4a3d2e;
+  --text: #f0e3cc;
+  --muted: #aa9577;
+  --green: #5ea878;
+  --orange: #c58a56;
+  --red: #9b3a35;
+  --chip-bg: #2d241b;
+  --surface-strong: #3b2f24;
+  --shadow-soft: 0 10px 24px rgba(0, 0, 0, 0.28);
 }
 
 @media (max-width: 900px) {
@@ -632,10 +756,10 @@ body.light-mode {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #444;
+  background: #bda989;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: #a38f70;
 }

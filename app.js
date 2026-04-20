@@ -13,8 +13,12 @@ let refreshTimer = null;
 let countdownInterval = null;
 let countdownSeconds = 60;
 let currentSource = CONFIG.ACTIVE_SOURCE;
+const BACKEND_BASE = 'http://127.0.0.1:5050';
+const MAX_ARTICLES = 2000;
 let mapSearchQuery = "";
-
+const REQUEST_TIMEOUT_MS = 30000;
+let latestArchiveTotal = 0;
+ 
 // ============================================================
 // SECTION 2 — COUNTRY DATA
 // ============================================================
@@ -106,9 +110,20 @@ function classifyScore(score) {
 // SECTION 4 — API FETCHERS
 // ============================================================
 async function fetchJSON(url, options = {}) {
-  const res = await fetch(url, options);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(`Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 function normalizeCountry(raw, title = "") {
@@ -299,55 +314,43 @@ async function fetchFromAllSources() {
 async function fetchLiveNews() {
   showLoading(true);
   showSourceStatus("Fetching...", "orange");
-
-  const sourceOrder = currentSource === "all"
-    ? ["all"]
-    : [currentSource, "gdelt", "rss", "newsdata", "gnews", "guardian", "currents"];
-
-  let rawArticles = null;
-  let usedSource = null;
-
-  for (const src of sourceOrder) {
-    try {
-      if (src === "all") rawArticles = await fetchFromAllSources();
-      else if (src === "newsdata") rawArticles = await fetchFromNewsData();
-      else if (src === "gnews") rawArticles = await fetchFromGNews();
-      else if (src === "newsapi") rawArticles = await fetchFromNewsAPI();
-      else if (src === "guardian") rawArticles = await fetchFromGuardian();
-      else if (src === "mediastack") rawArticles = await fetchFromMediastack();
-      else if (src === "currents") rawArticles = await fetchFromCurrents();
-      else if (src === "gdelt") rawArticles = await fetchFromGDELT();
-      else if (src === "rss") rawArticles = await fetchFromRSS();
-      usedSource = src;
-      break;
-    } catch (err) {
-      console.warn(`Source ${src} failed:`, err.message);
-      if (!CONFIG.AUTO_FALLBACK) break;
-    }
+  try {
+    const url = `${BACKEND_BASE}/api/news?limit=${MAX_ARTICLES}&page=1`;
+    const data = await fetchJSON(url);
+    const rawArticles = data?.results ?? [];
+    allArticles = rawArticles.map((a) => {
+      const score = a.score ?? 5;
+      const cls = a.cls ?? (score >= 6.5 ? 'peace' : (score < 4 ? 'conflict' : 'neutral'));
+      return { ...a, score, cls };
+    });
+    latestArchiveTotal = Number(data?.meta?.totalAvailable || allArticles.length || 0);
+    renderNewsFeed(applyFilters());
+    updateMetrics(allArticles, latestArchiveTotal);
+    updateChart(allArticles);
+    updateMapMarkers(allArticles);
+    updateTimestamp();
+    showSourceStatus(`✓ Backend · ${latestArchiveTotal} archived`, "green");
+    document.getElementById("feed-source-label").textContent = data?.meta?.country || 'Backend';
+  } catch (e) {
+    console.warn("Backend fetch failed:", e?.message || e);
+    allArticles = FALLBACK_ARTICLES.map((a) => {
+      const score = calculatePeaceScore(a.title, a.description);
+      const cls = classifyScore(score);
+      return { ...a, score, ...cls };
+    });
+    latestArchiveTotal = allArticles.length;
+    renderNewsFeed(applyFilters());
+    updateMetrics(allArticles, latestArchiveTotal);
+    updateChart(allArticles);
+    updateMapMarkers(allArticles);
+    updateTimestamp();
+    showSourceStatus("Fallback mode", "orange");
+    document.getElementById("feed-source-label").textContent = "Sample fallback · Auto-classified";
+    showErrorToast("Backend fetch failed. Showing fallback data.");
+  } finally {
+    showLoading(false);
+    resetCountdown();
   }
-
-  if (!rawArticles || !rawArticles.length) {
-    rawArticles = FALLBACK_ARTICLES;
-    usedSource = "fallback";
-    showErrorToast("Live APIs unavailable. Showing sample data.");
-  }
-
-  allArticles = rawArticles.map((a) => {
-    const score = calculatePeaceScore(a.title, a.description);
-    const cls = classifyScore(score);
-    return { ...a, score, ...cls };
-  });
-
-  renderNewsFeed(applyFilters());
-  updateMetrics(allArticles);
-  updateChart(allArticles);
-  updateMapMarkers(allArticles);
-  updateTimestamp();
-  showSourceStatus(`✓ ${CONFIG.APIs[usedSource]?.name || usedSource} · ${allArticles.length} articles`, "green");
-  document.getElementById("feed-source-label").textContent = `${CONFIG.APIs[usedSource]?.name || "Sample"} · Auto-classified`;
-
-  showLoading(false);
-  resetCountdown();
 }
 
 // ============================================================
@@ -415,11 +418,12 @@ function clearMapFilter() {
 // ============================================================
 // SECTION 8 — METRICS UPDATE
 // ============================================================
-function updateMetrics(articles) {
-  const total = articles.length;
+function updateMetrics(articles, totalOverride = null) {
+  const total = Number.isFinite(totalOverride) && totalOverride !== null ? totalOverride : articles.length;
+  const totalForCalc = articles.length;
   const peaceArr = articles.filter((a) => a.cls === "peace");
   const conflArr = articles.filter((a) => a.cls === "conflict");
-  const avgScore = total > 0 ? (articles.reduce((s, a) => s + a.score, 0) / total).toFixed(1) : "--";
+  const avgScore = totalForCalc > 0 ? (articles.reduce((s, a) => s + a.score, 0) / totalForCalc).toFixed(1) : "--";
 
   const gpiEl = document.getElementById("metric-gpi");
   animateValue(gpiEl, avgScore);
@@ -657,7 +661,7 @@ function manualRefresh() {
 
 function toggleTheme() {
   document.body.classList.toggle("light-mode");
-  document.getElementById("theme-toggle").textContent = document.body.classList.contains("light-mode") ? "🌙" : "☀";
+  document.getElementById("theme-toggle").textContent = document.body.classList.contains("light-mode") ? "☀" : "🌙";
 }
 
 function timeAgo(dateStr) {
@@ -673,6 +677,100 @@ function timeAgo(dateStr) {
 
 function truncate(str, n) {
   return str && str.length > n ? `${str.slice(0, n)}...` : (str || "");
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function appendChatMessage(role, htmlContent) {
+  const messages = document.getElementById("chat-messages");
+  if (!messages) return;
+
+  const empty = messages.querySelector(".chat-empty");
+  if (empty) empty.remove();
+
+  const wrapper = document.createElement("div");
+  wrapper.className = `chat-msg ${role}`;
+  wrapper.innerHTML = htmlContent;
+  messages.appendChild(wrapper);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function renderChatResponse(data) {
+  const answer = escapeHtml(data?.answer || "No response generated.");
+  const summaryItems = Array.isArray(data?.summary) ? data.summary : [];
+  const sources = Array.isArray(data?.sources) ? data.sources : [];
+  const assessment = data?.assessment || null;
+
+  const assessmentHtml = assessment
+    ? `<div class="chat-summary"><b>Risk:</b> ${escapeHtml(assessment.level || "N/A")} · <b>Articles:</b> ${escapeHtml(assessment.articleCount)} · <b>Avg score:</b> ${escapeHtml(assessment.avgScore)}</div>`
+    : "";
+
+  const summaryHtml = summaryItems.length
+    ? `<div class="chat-summary"><b>Summary</b><ul>${summaryItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>`
+    : "";
+
+  const sourceHtml = sources.length
+    ? `<div class="chat-sources"><b>Sources</b>${sources.slice(0, 6).map((s) => {
+      const title = escapeHtml(truncate(s.title, 90));
+      const publisher = escapeHtml(s.source || "Unknown");
+      const url = typeof s.url === "string" && s.url.startsWith("http") ? s.url : "#";
+      return `<a class="chat-source-link" target="_blank" rel="noopener noreferrer" href="${url}">${title} — ${publisher}</a>`;
+    }).join("")}</div>`
+    : "";
+
+  appendChatMessage(
+    "bot",
+    `<div class="chat-msg-title">Peace Assistant</div><div>${answer}</div>${assessmentHtml}${summaryHtml}${sourceHtml}`
+  );
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById("chat-input");
+  const button = document.getElementById("chat-send-btn");
+  if (!input || !button) return;
+
+  const question = input.value.trim();
+  if (!question) return;
+
+  appendChatMessage("user", `<div class="chat-msg-title">You</div><div>${escapeHtml(question)}</div>`);
+  input.value = "";
+  button.disabled = true;
+  appendChatMessage("bot", `<div class="chat-msg-title">Peace Assistant</div><div>Analyzing latest archived news...</div>`);
+
+  try {
+    const data = await fetchJSON(`${BACKEND_BASE}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question })
+    });
+
+    const messages = document.getElementById("chat-messages");
+    if (messages) {
+      const loadingMsg = messages.querySelector(".chat-msg.bot:last-child");
+      if (loadingMsg) loadingMsg.remove();
+    }
+    renderChatResponse(data);
+  } catch (error) {
+    const messages = document.getElementById("chat-messages");
+    if (messages) {
+      const loadingMsg = messages.querySelector(".chat-msg.bot:last-child");
+      if (loadingMsg) loadingMsg.remove();
+    }
+    appendChatMessage(
+      "bot",
+      `<div class="chat-msg-title">Peace Assistant</div><div>Unable to answer right now. Please try again after refresh.</div>`
+    );
+    showErrorToast("Chat assistant request failed");
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function detectCountryFromText(text) {
@@ -792,6 +890,16 @@ document.addEventListener("DOMContentLoaded", () => {
       const wrap = document.getElementById("country-search-wrap");
       if (wrap && !wrap.contains(event.target)) {
         renderCountrySearchResults([]);
+      }
+    });
+  }
+
+  const chatInput = document.getElementById("chat-input");
+  if (chatInput) {
+    chatInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        sendChatMessage();
       }
     });
   }
