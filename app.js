@@ -14,9 +14,9 @@ let countdownInterval = null;
 let countdownSeconds = 60;
 let currentSource = CONFIG.ACTIVE_SOURCE;
 const BACKEND_BASE = 'http://127.0.0.1:5050';
-const MAX_ARTICLES = 2000;
+const MAX_ARTICLES = 1000;
 let mapSearchQuery = "";
-const REQUEST_TIMEOUT_MS = 30000;
+const REQUEST_TIMEOUT_MS = 900000;
 let latestArchiveTotal = 0;
  
 // ============================================================
@@ -130,7 +130,7 @@ function normalizeCountry(raw, title = "") {
   if (!raw) return detectCountryFromText(title);
   const c = Array.isArray(raw) ? raw[0] : raw;
   const val = String(c || "").toLowerCase().trim();
-  if (val.length === 2) return val;
+  if (val.length === 2) return COUNTRY_COORDS[val] ? val : null;
   return detectCountryFromText(val || title);
 }
 
@@ -503,7 +503,8 @@ function updateMapMarkers(articles) {
   mapMarkers = [];
   const byCountry = {};
   articles.forEach((a) => {
-    const cc = (a.country || "us").toLowerCase();
+    const cc = (a.country || "").toLowerCase();
+    if (!cc || !COUNTRY_COORDS[cc]) return;
     if (!byCountry[cc]) byCountry[cc] = [];
     byCountry[cc].push(a);
   });
@@ -707,6 +708,7 @@ function renderChatResponse(data) {
   const summaryItems = Array.isArray(data?.summary) ? data.summary : [];
   const sources = Array.isArray(data?.sources) ? data.sources : [];
   const assessment = data?.assessment || null;
+  const modelLabel = escapeHtml(data?.model || "rules-based");
 
   const assessmentHtml = assessment
     ? `<div class="chat-summary"><b>Risk:</b> ${escapeHtml(assessment.level || "N/A")} · <b>Articles:</b> ${escapeHtml(assessment.articleCount)} · <b>Avg score:</b> ${escapeHtml(assessment.avgScore)}</div>`
@@ -727,7 +729,7 @@ function renderChatResponse(data) {
 
   appendChatMessage(
     "bot",
-    `<div class="chat-msg-title">Peace Assistant</div><div>${answer}</div>${assessmentHtml}${summaryHtml}${sourceHtml}`
+    `<div class="chat-msg-title">Peace Assistant · ${modelLabel}</div><div>${answer}</div>${assessmentHtml}${summaryHtml}${sourceHtml}`
   );
 }
 
@@ -780,13 +782,15 @@ function detectCountryFromText(text) {
     china: "cn", india: "in", pakistan: "pk", myanmar: "mm", sudan: "sd",
     ethiopia: "et", nigeria: "ng", libya: "ly", somalia: "so", lebanon: "lb",
     usa: "us", "united states": "us", america: "us", uk: "gb", britain: "gb",
-    france: "fr", germany: "de", australia: "au", canada: "ca", japan: "jp"
+    "united kingdom": "gb", england: "gb", france: "fr", germany: "de",
+    australia: "au", canada: "ca", japan: "jp", turkey: "tr",
+    mexico: "mx", egypt: "eg", saudi: "sa", "saudi arabia": "sa"
   };
   const t = (text || "").toLowerCase();
   for (const [word, code] of Object.entries(mapCountry)) {
     if (t.includes(word)) return code;
   }
-  return "us";
+  return null;
 }
 
 function formatGDELTDate(str) {

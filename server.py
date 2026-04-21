@@ -27,6 +27,10 @@ SAMPLE_NEWS_PATH = BASE_DIR / "data" / "sample_news.json"
 DB_PATH = Path(os.getenv("NEWS_DB_PATH", str(BASE_DIR / "news_archive.db")))
 SQLITE_MAX_ROWS = max(1000, int(os.getenv("SQLITE_MAX_ROWS", "50000")))
 SQLITE_PRUNE_BATCH = max(100, int(os.getenv("SQLITE_PRUNE_BATCH", "1000")))
+PEACE_ASSISTANT_TIMEOUT = max(5, int(os.getenv("PEACE_ASSISTANT_TIMEOUT", "20")))
+OLLAMA_ANALYZE_TIMEOUT = max(10, int(os.getenv("OLLAMA_ANALYZE_TIMEOUT", "45")))
+OLLAMA_ANALYZE_LIMIT = max(1, int(os.getenv("OLLAMA_ANALYZE_LIMIT", "250")))
+OLLAMA_ANALYZE_BATCH = max(1, int(os.getenv("OLLAMA_ANALYZE_BATCH", "25")))
 
 RSS_FEEDS = [
     ("BBC World", "http://feeds.bbci.co.uk/news/world/rss.xml"),
@@ -98,6 +102,13 @@ QUERY_STOPWORDS = {
 HYBRID_CACHE: dict[str, dict[str, Any]] = {}
 CACHE_TTL_SECONDS = 180
 DB_LOCK = threading.Lock()
+
+
+def env_flag(name: str, default: bool = False) -> bool:
+    val = os.getenv(name)
+    if val is None:
+        return default
+    return str(val).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def load_dotenv() -> None:
@@ -529,6 +540,113 @@ def compose_chat_response(question: str) -> dict[str, Any]:
     }
 
 
+def get_peace_assistant_config() -> tuple[str | None, str, str, str]:
+    provider = os.getenv("PEACE_ASSISTANT_PROVIDER", "").strip().lower()
+    openai_key = os.getenv("OPENAI_API_KEY", "").strip()
+    openrouter_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+    ollama_model = os.getenv("OLLAMA_MODEL", "").strip() or "llama3.2:3b"
+    ollama_base = os.getenv("OLLAMA_API_URL", "").strip() or "http://127.0.0.1:11434"
+
+    api_key = os.getenv("PEACE_ASSISTANT_API_KEY", "").strip() or openai_key or openrouter_key
+    model = os.getenv("PEACE_ASSISTANT_MODEL", "").strip()
+    endpoint = os.getenv("PEACE_ASSISTANT_API_URL", "").strip()
+
+    if provider == "ollama":
+        endpoint = endpoint or f"{ollama_base.rstrip('/')}/api/chat"
+        model = model or ollama_model
+        return (None, endpoint, model, "ollama")
+
+    if endpoint and ("127.0.0.1:11434" in endpoint or "localhost:11434" in endpoint or endpoint.rstrip("/").endswith("/api/chat")):
+        model = model or ollama_model
+        return (None, endpoint, model, "ollama")
+
+    if not endpoint:
+        endpoint = "https://api.openai.com/v1/chat/completions" if (openai_key or not openrouter_key) else "https://openrouter.ai/api/v1/chat/completions"
+    if not model:
+        model = "gpt-4o-mini" if "openai.com" in endpoint else "openai/gpt-4o-mini"
+
+    provider = "openrouter" if "openrouter.ai" in endpoint else "openai"
+    return (api_key or None, endpoint, model, provider)
+
+
+def maybe_enhance_chat_with_model(question: str, base_response: dict[str, Any]) -> dict[str, Any]:
+    api_key, endpoint, model, provider = get_peace_assistant_config()
+    if provider != "ollama" and not api_key:
+        return {**base_response, "model": "rules-based"}
+
+    assessment = base_response.get("assessment") or {}
+    summary_items = base_response.get("summary") or []
+    source_items = base_response.get("sources") or []
+    short_sources = [
+        f"- {item.get('title', '').strip()} ({item.get('source', 'Unknown')})"
+        for item in source_items[:6]
+        if item.get("title")
+    ]
+    summary_block = "\n".join(f"- {s}" for s in summary_items if isinstance(s, str))
+    sources_block = "\n".join(short_sources) if short_sources else "- No source headlines available"
+
+    system_prompt = (
+        "You are Peace Assistant for a global dashboard. "
+        "Give concise, factual answers using only provided context. "
+        "If confidence is low, explicitly say data may be incomplete. "
+        "Do not invent events or sources."
+    )
+    user_prompt = (
+        f"User question:\n{question}\n\n"
+        f"Baseline answer:\n{base_response.get('answer', '')}\n\n"
+        f"Risk assessment:\n"
+        f"- Level: {assessment.get('level', 'N/A')}\n"
+        f"- Country: {assessment.get('country', 'global')}\n"
+        f"- Avg score: {assessment.get('avgScore', 'N/A')}\n"
+        f"- Conflict ratio: {assessment.get('conflictRatio', 'N/A')}\n"
+        f"- Article count: {assessment.get('articleCount', 0)}\n\n"
+        f"Summary bullets:\n{summary_block or '- None'}\n\n"
+        f"Top source headlines:\n{sources_block}\n\n"
+        "Rewrite a better final answer in 2-5 sentences. Keep it actionable."
+    )
+
+    if provider == "ollama":
+        headers = {"Content-Type": "application/json"}
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "stream": False,
+            "options": {"temperature": 0.2},
+        }
+    else:
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": 0.2,
+            "max_tokens": 220,
+        }
+        if "openrouter.ai" in endpoint:
+            headers["HTTP-Referer"] = "http://localhost:5050"
+            headers["X-Title"] = "Global Peace Dashboard"
+
+    try:
+        result = requests.post(endpoint, headers=headers, json=payload, timeout=PEACE_ASSISTANT_TIMEOUT)
+        result.raise_for_status()
+        data = result.json()
+        if provider == "ollama":
+            model_answer = (data.get("message") or {}).get("content", "") or data.get("response", "")
+        else:
+            model_answer = ((data.get("choices") or [{}])[0].get("message") or {}).get("content", "")
+        model_answer = (model_answer or "").strip()
+        if not model_answer:
+            return {**base_response, "model": "rules-based"}
+        return {**base_response, "answer": model_answer, "model": model}
+    except Exception:
+        return {**base_response, "model": "rules-based"}
+
+
 def normalize_country(value: str) -> str:
     val = (value or "").strip().lower()
     if not val:
@@ -598,6 +716,86 @@ def classify_category(peace_score: float) -> str:
     if peace_score >= 4.0:
         return "NEUTRAL"
     return "CONFLICT"
+
+
+def maybe_analyze_articles_with_ollama(articles: list[dict]) -> tuple[list[dict], int, str]:
+    if not articles:
+        return articles, 0, "disabled"
+    if not env_flag("OLLAMA_ANALYZE_ALL", False):
+        return articles, 0, "disabled"
+
+    base_url = (os.getenv("OLLAMA_API_URL", "http://127.0.0.1:11434").strip() or "http://127.0.0.1:11434").rstrip("/")
+    model = os.getenv("OLLAMA_ANALYZE_MODEL", "").strip() or os.getenv("OLLAMA_MODEL", "").strip() or "llama3:latest"
+    endpoint = f"{base_url}/api/generate"
+
+    total_target = min(len(articles), OLLAMA_ANALYZE_LIMIT)
+    analyzed = 0
+
+    for start in range(0, total_target, OLLAMA_ANALYZE_BATCH):
+        end = min(start + OLLAMA_ANALYZE_BATCH, total_target)
+        batch = articles[start:end]
+        payload_rows = [
+            {
+                "idx": i,
+                "title": (row.get("title") or "")[:220],
+                "description": (row.get("description") or "")[:320],
+                "country": row.get("country") or "global",
+                "source": row.get("source") or "",
+            }
+            for i, row in enumerate(batch)
+        ]
+
+        prompt = (
+            "Analyze each news item and return STRICT JSON only.\n"
+            "Return an object with key 'results' as an array.\n"
+            "Each result object MUST have: idx (int), score (number 0.1-9.9), category (PEACE|NEUTRAL|CONFLICT), country (2-letter code or 'global').\n"
+            "Do not include markdown.\n\n"
+            f"Input: {json.dumps(payload_rows, ensure_ascii=True)}"
+        )
+
+        try:
+            resp = requests.post(
+                endpoint,
+                json={"model": model, "prompt": prompt, "stream": False, "format": "json"},
+                timeout=OLLAMA_ANALYZE_TIMEOUT,
+            )
+            resp.raise_for_status()
+            body = resp.json()
+            text = (body.get("response") or "").strip()
+            parsed = json.loads(text) if text else {}
+            results = parsed.get("results", []) if isinstance(parsed, dict) else []
+            if not isinstance(results, list):
+                continue
+
+            for item in results:
+                if not isinstance(item, dict):
+                    continue
+                idx = item.get("idx")
+                if not isinstance(idx, int) or idx < 0 or idx >= len(batch):
+                    continue
+
+                raw_score = item.get("score")
+                try:
+                    score = float(raw_score)
+                except (TypeError, ValueError):
+                    continue
+                score = round(max(0.1, min(9.9, score)), 1)
+
+                category = str(item.get("category") or "").upper()
+                if category not in {"PEACE", "NEUTRAL", "CONFLICT"}:
+                    category = classify_category(score)
+
+                country = normalize_country(str(item.get("country") or "global"))
+                batch[idx]["score"] = score
+                batch[idx]["peaceScore"] = score
+                batch[idx]["category"] = category
+                batch[idx]["cls"] = category.lower()
+                batch[idx]["country"] = country
+                analyzed += 1
+        except Exception:
+            continue
+
+    return articles, analyzed, model
 
 
 def normalize_article(
@@ -810,8 +1008,16 @@ def aggregate_hybrid_news(*, country: str, size: int) -> tuple[list[dict], dict]
         source_counts["fallback"] = len(collected)
 
     merged = sort_articles_desc(deduplicate_articles(collected))[:size]
+    merged, ollama_analyzed, ollama_model = maybe_analyze_articles_with_ollama(merged)
     HYBRID_CACHE[cache_key] = {"ts": time(), "data": merged, "sources": source_counts, "errors": errors}
-    return merged, {"cached": False, "sources": source_counts, "errors": errors}
+    return merged, {
+        "cached": False,
+        "sources": source_counts,
+        "errors": errors,
+        "analysisProvider": "ollama" if env_flag("OLLAMA_ANALYZE_ALL", False) else "rules-based",
+        "ollamaAnalyzedCount": ollama_analyzed,
+        "ollamaModel": ollama_model,
+    }
 
 
 load_dotenv()
@@ -833,8 +1039,45 @@ def get_news():
     page = int(request.args.get("page", "1"))
     page = max(1, page)
     category = (request.args.get("category") or "").strip().upper()
+    force_refresh = (request.args.get("refresh") or "").strip().lower() in {"1", "true", "yes"}
+
+    paged, total_available = query_articles_sqlite(
+        country=country,
+        category=category,
+        limit=limit,
+        page=page,
+    )
+
+    # Fast path: if archive already has enough rows for this page, serve immediately.
+    required_for_page = page * limit
+    if paged and total_available >= required_for_page and not force_refresh:
+        return jsonify(
+            {
+                "results": paged,
+                "meta": {
+                    "mode": "sqlite_archive",
+                    "count": len(paged),
+                    "totalAvailable": total_available,
+                    "country": country,
+                    "category": category or "all",
+                    "page": page,
+                    "limit": limit,
+                    "cached": True,
+                    "ingestedThisFetch": 0,
+                    "deletedOldestThisFetch": 0,
+                    "maxArchiveSize": SQLITE_MAX_ROWS,
+                    "sourceCounts": {},
+                    "errors": {},
+                    "analysisProvider": "ollama" if env_flag("OLLAMA_ANALYZE_ALL", False) else "rules-based",
+                    "ollamaAnalyzedCount": 0,
+                    "ollamaModel": os.getenv("OLLAMA_ANALYZE_MODEL", "").strip() or os.getenv("OLLAMA_MODEL", "").strip(),
+                },
+            }
+        )
 
     fetch_size = 3000 if country == "global" else min(3000, max(500, limit * page, limit))
+    if env_flag("OLLAMA_ANALYZE_ALL", False):
+        fetch_size = min(fetch_size, OLLAMA_ANALYZE_LIMIT)
     ingested = 0
     deleted_oldest = 0
     meta: dict[str, Any] = {"cached": False, "sources": {}, "errors": {}}
@@ -870,6 +1113,9 @@ def get_news():
                 "maxArchiveSize": SQLITE_MAX_ROWS,
                 "sourceCounts": meta["sources"],
                 "errors": meta["errors"],
+                "analysisProvider": meta.get("analysisProvider", "rules-based"),
+                "ollamaAnalyzedCount": meta.get("ollamaAnalyzedCount", 0),
+                "ollamaModel": meta.get("ollamaModel", ""),
             },
         }
     )
@@ -885,6 +1131,7 @@ def chat_with_news():
     payload = request.get_json(silent=True) or {}
     question = str(payload.get("question") or "").strip()
     response = compose_chat_response(question)
+    response = maybe_enhance_chat_with_model(question, response)
     return jsonify(response)
 
 
